@@ -1,0 +1,93 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-spotify-black: #121212;
+  --color-spotify-dark: #181818;
+  --color-spotify-card: #1e1e1e;
+  --color-spotify-elevated: #2a2a2a;
+  --color-spotify-border: #2e2e2e;
+  --color-spotify-green: #1DB954;
+  --color-spotify-green-light: #1ed760;
+  --color-spotify-gray: #B3B3B3;
+  --color-spotify-muted: #535353;
+  --color-grade-a: #1DB954;
+  --color-grade-b: #4ade80;
+  --color-grade-c: #facc15;
+  --color-grade-d: #fb923c;
+  --color-grade-f: #f87171;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #121212;
+  color: #ffffff;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #121212; }
+::-webkit-scrollbar-thumb { background: #535353; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #1DB954; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-18px); }
+}
+
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(29,185,84,0.5); }
+  50% { box-shadow: 0 0 0 14px rgba(29,185,84,0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.animate-float       { animation: float 6s ease-in-out infinite; }
+.animate-pulse-glow  { animation: pulseGlow 2.5s ease-in-out infinite; }
+.animate-fade-in-up  { animation: fadeInUp 0.7s ease-out forwards; }
+
+.wave-bar {
+  transform-origin: bottom;
+  animation: waveBar 1.2s ease-in-out infinite;
+}
+
+.hero-bg {
+  background: radial-gradient(ellipse 80% 60% at 50% -10%, rgba(29,185,84,0.18) 0%, transparent 65%), #121212;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff 0%, #1DB954 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.shimmer-text {
+  background: linear-gradient(90deg, #1DB954 0%, #1ed760 25%, #1DB954 50%, #1ed760 75%, #1DB954 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
