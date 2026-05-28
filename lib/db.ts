@@ -48,3 +48,17 @@ export async function getSignupCount(): Promise<number> {
   const result = await db`SELECT COUNT(*)::int AS count FROM signups`;
   return result[0].count;
 }
+
+export async function insertContact(name: string, email: string, message: string) {
+  const db = getDb();
+  await db`
+    CREATE TABLE IF NOT EXISTS contacts (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      email      TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await db`INSERT INTO contacts (name, email, message) VALUES (${name}, ${email}, ${message})`;
+}

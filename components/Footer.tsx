@@ -80,13 +80,18 @@ export default function Footer() {
           <div>
             <h4 className="text-white font-semibold text-sm mb-4">Company</h4>
             <ul className="space-y-3">
-              {[links.about, links.blog, links.press, links.contact].map((l) => (
+              {[links.about, links.press].map((l) => (
                 <li key={l}>
                   <a href="#" className="text-[#B3B3B3] hover:text-white text-sm transition-colors duration-150">
                     {l}
                   </a>
                 </li>
               ))}
+              <li>
+                <a href="/contact" className="text-[#B3B3B3] hover:text-white text-sm transition-colors duration-150">
+                  {links.contact}
+                </a>
+              </li>
             </ul>
           </div>
 
