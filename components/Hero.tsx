@@ -27,7 +27,7 @@ export default function Hero() {
       <div className="max-w-4xl mx-auto px-6 py-20 w-full flex flex-col items-center text-center">
 
         {/* Big centered logo with glow */}
-        <div className="relative mb-8 animate-float">
+        <div className="relative mb-8">
           <div className="absolute inset-0 bg-[#1DB954]/20 rounded-full blur-3xl scale-110" />
           <div className="relative w-52 h-52 sm:w-64 sm:h-64 md:w-80 md:h-80 rounded-full overflow-hidden ring-4 ring-[#1DB954]/40 shadow-2xl shadow-[#1DB954]/20">
             <Image
