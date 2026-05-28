@@ -1,17 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
+
+function makeCaptcha() {
+  const a = Math.floor(Math.random() * 9) + 1;
+  const b = Math.floor(Math.random() * 9) + 1;
+  return { a, b, answer: a + b };
+}
 
 export default function ContactPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [captchaInput, setCaptchaInput] = useState("");
+  const [captcha, setCaptcha] = useState({ a: 0, b: 0, answer: 0 });
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error" | "captcha-fail">("idle");
+
+  useEffect(() => {
+    setCaptcha(makeCaptcha());
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (parseInt(captchaInput) !== captcha.answer) {
+      setStatus("captcha-fail");
+      setCaptcha(makeCaptcha());
+      setCaptchaInput("");
+      return;
+    }
     setStatus("loading");
     try {
       const res = await fetch("/api/contact", {
@@ -26,12 +44,13 @@ export default function ContactPage() {
       setMessage("");
     } catch {
       setStatus("error");
+      setCaptcha(makeCaptcha());
+      setCaptchaInput("");
     }
   }
 
   return (
     <div className="min-h-screen bg-[#121212] flex flex-col">
-      {/* Minimal nav */}
       <nav className="flex items-center justify-between px-6 py-4 border-b border-white/5">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative w-8 h-8 rounded-full overflow-hidden ring-2 ring-[#1DB954]/40 group-hover:ring-[#1DB954] transition-all duration-300">
@@ -44,7 +63,6 @@ export default function ContactPage() {
         </Link>
       </nav>
 
-      {/* Form */}
       <div className="flex-1 flex items-center justify-center px-6 py-20">
         <div className="w-full max-w-lg">
           <div className="inline-flex items-center gap-2 bg-[#1DB954]/10 border border-[#1DB954]/30 rounded-full px-4 py-1.5 mb-6">
@@ -89,6 +107,24 @@ export default function ContactPage() {
                 className="w-full bg-[#1e1e1e] border border-white/10 focus:border-[#1DB954]/50 rounded-xl px-5 py-4 text-white placeholder-[#535353] outline-none transition-colors duration-200 resize-none"
               />
 
+              {/* Math captcha */}
+              <div className="bg-[#1e1e1e] border border-white/10 rounded-xl px-5 py-4 flex items-center gap-4">
+                <span className="text-[#B3B3B3] text-sm whitespace-nowrap">
+                  What is {captcha.a} + {captcha.b}?
+                </span>
+                <input
+                  type="number"
+                  value={captchaInput}
+                  onChange={(e) => { setCaptchaInput(e.target.value); if (status === "captcha-fail") setStatus("idle"); }}
+                  placeholder="Answer"
+                  required
+                  className="w-24 bg-[#2a2a2a] border border-white/10 focus:border-[#1DB954]/50 rounded-lg px-3 py-2 text-white placeholder-[#535353] outline-none transition-colors text-sm"
+                />
+              </div>
+
+              {status === "captcha-fail" && (
+                <p className="text-red-400 text-sm">Incorrect answer — try again.</p>
+              )}
               {status === "error" && (
                 <p className="text-red-400 text-sm">Something went wrong. Please try again.</p>
               )}

@@ -49,8 +49,7 @@ export async function getSignupCount(): Promise<number> {
   return result[0].count;
 }
 
-export async function insertContact(name: string, email: string, message: string) {
-  const db = getDb();
+async function ensureContactsTable(db: ReturnType<typeof postgres>) {
   await db`
     CREATE TABLE IF NOT EXISTS contacts (
       id         SERIAL PRIMARY KEY,
@@ -60,5 +59,16 @@ export async function insertContact(name: string, email: string, message: string
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `;
+}
+
+export async function insertContact(name: string, email: string, message: string) {
+  const db = getDb();
+  await ensureContactsTable(db);
   await db`INSERT INTO contacts (name, email, message) VALUES (${name}, ${email}, ${message})`;
+}
+
+export async function getAllContacts() {
+  const db = getDb();
+  await ensureContactsTable(db);
+  return db`SELECT * FROM contacts ORDER BY created_at DESC`;
 }
