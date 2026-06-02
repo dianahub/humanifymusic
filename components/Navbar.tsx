@@ -19,6 +19,13 @@ export default function Navbar() {
       <div className="flex items-center gap-3">
         <LanguageSelector />
         <a
+          href="/analyze"
+          className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white font-medium text-sm transition-all duration-200 border border-white/10"
+        >
+          <span className="text-xs">🎵</span>
+          Analyze
+        </a>
+        <a
           href="#signup"
           className="hidden sm:inline-flex items-center px-4 py-2 rounded-full bg-[#1DB954] hover:bg-[#1ed760] text-black font-semibold text-sm transition-all duration-200 hover:scale-105"
         >
