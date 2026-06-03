@@ -3,6 +3,8 @@ import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
+// ffmpeg-static provides a bundled binary so ffmpeg doesn't need to be installed on the host
+import ffmpegStatic from 'ffmpeg-static';
 
 const SR = 22050;
 const BUF = 2048;
@@ -300,8 +302,9 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer();
     writeFileSync(inputPath, Buffer.from(bytes));
 
+    const ffmpegBin = ffmpegStatic ?? 'ffmpeg';
     execSync(
-      `ffmpeg -i "${inputPath}" -ac 1 -ar ${SR} -f f32le -y "${outputPath}"`,
+      `"${ffmpegBin}" -i "${inputPath}" -ac 1 -ar ${SR} -f f32le -y "${outputPath}"`,
       { timeout: 120_000, stdio: 'ignore' }
     );
 

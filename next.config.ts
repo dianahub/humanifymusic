@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Prevent Next.js from bundling meyda — it references Web Audio API globals
   // that break the server bundler. Load it at runtime via Node.js require instead.
-  serverExternalPackages: ["meyda"],
+  serverExternalPackages: ["meyda", "ffmpeg-static"],
 };
 
 export default nextConfig;
