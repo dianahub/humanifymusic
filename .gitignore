@@ -44,3 +44,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# test audio samples — never commit audio files
+test-samples/**/*.mp3
+test-samples/**/*.wav

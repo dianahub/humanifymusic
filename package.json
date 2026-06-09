@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:detector": "node scripts/test-detector.mjs",
+    "test:detector:railway": "node scripts/test-detector.mjs https://humanifymusic-production.up.railway.app"
   },
   "engines": {
     "node": ">=20.0.0"
