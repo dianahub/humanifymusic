@@ -30,8 +30,10 @@ type FrameFeatures = {
   zcr: number;
   spectralCentroid: number;
   spectralFlatness: number;
+  spectralSlope: number;
   mfcc: number[];
   chroma: number[];
+  subBandEnergies: number[]; // [0-800Hz, 800-2kHz, 2-5kHz, 5-11kHz]
 };
 
 function mean(arr: number[]): number {
@@ -171,62 +173,94 @@ function analyzeTimeAlignment(frames: FrameFeatures[]): MetricResult {
 }
 
 // AI generation detection:
-// AI-generated audio tends to have unnaturally consistent spectral characteristics:
-// low variance in spectral flatness, smooth MFCC transitions, compressed dynamics.
+// Targets neural audio synthesis fingerprints (Suno/Udio/EnCodec/DAC), NOT post-processing
+// artifacts. Neural synthesis gets pitch/timing right but betrays itself through:
+//   1. Frozen fine spectral texture (high-order MFCCs barely move relative to coarse MFCCs)
+//   2. Too-regular frame-to-frame spectral transitions (low delta burstiness)
+//   3. Unnaturally stable high-frequency sub-bands (5–11 kHz)
+//   4. Consistent spectral tilt (slope doesn't fluctuate as real instruments enter/exit)
 function analyzeAIGeneration(frames: FrameFeatures[]): MetricResult {
   if (frames.length < 20) return { score: 0, label: 'Insufficient data', timestamps: [] };
 
-  const flatnesses = frames.map(f => f.spectralFlatness).filter(v => isFinite(v));
-  const flatnessVariance = std(flatnesses);
+  // --- 1. MFCC texture ratio ---
+  // Low-order MFCCs (1–3): broad spectral shape — AI gets this right, so it varies normally.
+  // High-order MFCCs (7–12): fine spectral texture — AI freezes these unnaturally.
+  // Natural ratio (high-std / low-std) ≥ 0.20;  neural synthesis < 0.12.
+  const lowMfccStds: number[] = [];
+  const highMfccStds: number[] = [];
+  for (let c = 1; c <= 3; c++) lowMfccStds.push(std(frames.map(f => f.mfcc[c] ?? 0)));
+  for (let c = 7; c <= 12; c++) highMfccStds.push(std(frames.map(f => f.mfcc[c] ?? 0)));
+  const avgLow = mean(lowMfccStds);
+  const avgHigh = mean(highMfccStds);
+  const textureRatio = avgLow > 0.5 ? avgHigh / avgLow : 1.0;
+  const mfccTextureFactor = clamp(1 - textureRatio / 0.18, 0, 1);
 
-  // MFCC frame-to-frame delta (L2 distance)
-  const mfccDeltas: number[] = [];
+  // --- 2. MFCC delta burstiness ---
+  // Human performances: irregular spectral jumps (high delta coefficient of variation).
+  // Neural synthesis: transitions are too smooth and uniform (low delta CV).
+  // Natural CV > 0.55;  AI < 0.30.
+  const deltas: number[] = [];
   for (let i = 1; i < frames.length; i++) {
     const prev = frames[i - 1].mfcc;
     const curr = frames[i].mfcc;
-    const delta = Math.sqrt(curr.reduce((acc, v, j) => acc + (v - (prev[j] ?? 0)) ** 2, 0));
-    if (isFinite(delta)) mfccDeltas.push(delta);
+    const d = Math.sqrt(curr.reduce((acc, v, j) => acc + (v - (prev[j] ?? 0)) ** 2, 0));
+    if (isFinite(d)) deltas.push(d);
   }
-  const avgMfccDelta = mean(mfccDeltas);
+  const deltaMean = mean(deltas);
+  const deltaCV = deltaMean > 0.5 ? std(deltas) / deltaMean : 1.0;
+  const deltaFactor = clamp(1 - deltaCV / 0.50, 0, 1);
 
-  // Dynamic range
-  const rmsValues = frames.map(f => f.rms).filter(v => v > 0.001);
-  const p95 = rmsValues.sort((a, b) => a - b)[Math.floor(rmsValues.length * 0.95)] ?? 0;
-  const p05 = rmsValues[Math.floor(rmsValues.length * 0.05)] ?? 0;
-  const dynamicRange = p95 - p05;
+  // --- 3. Sub-band temporal stability ---
+  // Real music: high-frequency bands (2–11 kHz) vary energetically with the arrangement.
+  // Neural synthesis: generates a suspiciously steady high-freq texture.
+  // Check: (high-band CV) / (low-band CV) — natural > 0.50, AI < 0.25.
+  const lowBandEnergies = frames.map(f => f.subBandEnergies[0] + f.subBandEnergies[1]);
+  const highBandEnergies = frames.map(f => f.subBandEnergies[2] + f.subBandEnergies[3]);
+  const lowBandMean = mean(lowBandEnergies);
+  const highBandMean = mean(highBandEnergies);
+  const lowCV = lowBandMean > 1e-10 ? std(lowBandEnergies) / lowBandMean : 1.0;
+  const highCV = highBandMean > 1e-10 ? std(highBandEnergies) / highBandMean : 1.0;
+  const cvRatio = lowCV > 0.01 ? highCV / lowCV : 1.0;
+  const subBandFactor = clamp(1 - cvRatio / 0.45, 0, 1);
 
-  // ZCR variance
-  const zcrValues = frames.map(f => f.zcr);
-  const zcrVariance = std(zcrValues);
+  // --- 4. Spectral slope variance ---
+  // Natural audio: tonal balance shifts as instruments enter/exit (high slope variance).
+  // Neural synthesis: spectral tilt stays too consistent across the track.
+  // Natural normalised std > 0.12;  AI < 0.05.
+  const slopes = frames.map(f => f.spectralSlope).filter(v => isFinite(v) && v !== 0);
+  let slopeFactor = 0;
+  if (slopes.length > 10) {
+    const absSlopes = slopes.map(Math.abs);
+    const normStd = mean(absSlopes) > 1e-10 ? std(slopes) / mean(absSlopes) : 1.0;
+    slopeFactor = clamp(1 - normStd / 0.10, 0, 1);
+  }
 
-  // Score components (higher = more AI-like)
-  // Natural: flatnessVariance > 0.04, avgMfccDelta > 6, dynamicRange > 0.08, zcrVariance > 30
-  const flatnessFactor = clamp(1 - flatnessVariance / 0.05, 0, 1);
-  const mfccFactor = clamp(1 - avgMfccDelta / 8, 0, 1);
-  const dynamicFactor = clamp(1 - dynamicRange / 0.10, 0, 1);
-  const zcrFactor = clamp(1 - zcrVariance / 35, 0, 1);
-
-  const overallFactor = 0.35 * flatnessFactor + 0.35 * mfccFactor + 0.20 * dynamicFactor + 0.10 * zcrFactor;
+  const overallFactor =
+    0.40 * mfccTextureFactor +
+    0.25 * deltaFactor +
+    0.25 * subBandFactor +
+    0.10 * slopeFactor;
   const score = Math.round(clamp(overallFactor * 100, 0, 100));
 
-  // Flag windows with abnormally uniform spectra
+  // Flag windows where the MFCC texture freeze is strongest
   const WIN = Math.max(10, Math.round(5 * SR / HOP));
   const timestamps: Timestamp[] = [];
-
   for (let i = WIN; i < frames.length; i += Math.floor(WIN / 2)) {
-    const winFlatness = flatnesses.slice(Math.max(0, i - WIN), i);
-    const winVariance = std(winFlatness);
-    if (winVariance < 0.025 && winFlatness.length > 5) {
-      const timeStart = frames[Math.max(0, i - WIN)].time;
-      const timeEnd = frames[i].time;
+    const win = frames.slice(Math.max(0, i - WIN), i);
+    const wLow = mean([1, 2, 3].map(c => std(win.map(f => f.mfcc[c] ?? 0))));
+    const wHigh = mean([7, 8, 9, 10, 11, 12].map(c => std(win.map(f => f.mfcc[c] ?? 0))));
+    const wRatio = wLow > 0.5 ? wHigh / wLow : 1.0;
+    if (wRatio < 0.12 && wLow > 0.5) {
+      const timeStart = win[0].time;
+      const timeEnd = win[win.length - 1].time;
       const last = timestamps[timestamps.length - 1];
       if (!last || timeStart > last.timeEnd + 1.0) {
-        const severity: Timestamp['severity'] = winVariance < 0.010 ? 'high' : winVariance < 0.018 ? 'medium' : 'low';
+        const severity: Timestamp['severity'] = wRatio < 0.06 ? 'high' : wRatio < 0.09 ? 'medium' : 'low';
         timestamps.push({
           timeStart,
           timeEnd,
           severity,
-          detail: `Spectral uniformity — flatness σ ${winVariance.toFixed(4)} (natural > 0.04)`,
+          detail: `Neural texture fingerprint — MFCC fine/coarse ratio ${wRatio.toFixed(3)} (natural > 0.20)`,
         });
       }
     }
@@ -337,18 +371,42 @@ export async function POST(request: Request) {
       try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const feat = (Meyda as any).extract(
-          ['rms', 'zcr', 'spectralCentroid', 'spectralFlatness', 'mfcc', 'chroma'],
+          ['rms', 'zcr', 'spectralCentroid', 'spectralFlatness', 'spectralSlope', 'mfcc', 'chroma', 'powerSpectrum'],
           frame
         );
         if (!feat) continue;
+
+        // Compute sub-band mean energies from power spectrum (avoids storing 1025 floats/frame)
+        const ps: number[] = feat.powerSpectrum ? Array.from(feat.powerSpectrum as Float32Array) : [];
+        const BIN_HZ = SR / BUF; // ≈ 10.77 Hz/bin
+        const b0 = 0;
+        const b1 = Math.round(800 / BIN_HZ);
+        const b2 = Math.round(2000 / BIN_HZ);
+        const b3 = Math.round(5000 / BIN_HZ);
+        const b4 = ps.length;
+        const bandMean = (lo: number, hi: number) => {
+          const n = Math.min(hi, b4) - lo;
+          if (n <= 0) return 0;
+          let sum = 0;
+          for (let k = lo; k < Math.min(hi, b4); k++) sum += ps[k];
+          return sum / n;
+        };
+
         frames.push({
           time: s / SR,
           rms: isFinite(feat.rms) ? feat.rms : 0,
           zcr: isFinite(feat.zcr) ? feat.zcr : 0,
           spectralCentroid: isFinite(feat.spectralCentroid) ? feat.spectralCentroid : 0,
           spectralFlatness: isFinite(feat.spectralFlatness) ? feat.spectralFlatness : 0,
+          spectralSlope: isFinite(feat.spectralSlope) ? feat.spectralSlope : 0,
           mfcc: Array.isArray(feat.mfcc) ? feat.mfcc.map((v: number) => isFinite(v) ? v : 0) : new Array(13).fill(0),
           chroma: Array.isArray(feat.chroma) ? feat.chroma.map((v: number) => isFinite(v) ? v : 0) : new Array(12).fill(0),
+          subBandEnergies: [
+            bandMean(b0, b1), // 0–800 Hz
+            bandMean(b1, b2), // 800 Hz–2 kHz
+            bandMean(b2, b3), // 2–5 kHz
+            bandMean(b3, b4), // 5–11 kHz
+          ],
         });
       } catch { /* skip bad frame */ }
     }
